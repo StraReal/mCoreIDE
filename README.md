@@ -5,6 +5,6 @@ Create a vars.json and just put one single "user" entry, which should be your PC
 
 Make a sketch.ino file with the Arduino code (examples in the examples folder), run uploadsketch.py and the Arduino code will be loaded (I made this lazily so it only works on COM3, probably an easy fix but idk).
 
-The code should be uploaded onto the board, and by running serialconsole.py you can send and receive signals over any baud (default is 57600).
+The code should be uploaded onto the board, and by running serialconsole.py you can send and receive signals over serial cable or bluetooth connection (using the BLE chip on the mCore if there's one), which requires a baud rate of 115200.
 
 There are many things that are needed and can be added, so if you take this as basis and fix them send a PR, I'll accept it.
