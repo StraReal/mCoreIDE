@@ -1,4 +1,5 @@
 import json
+import re
 import subprocess
 import shutil
 import os
@@ -95,13 +96,33 @@ def compile_cpp(src, out):
         f"Compiling {os.path.basename(src)}"
     )
 
-def find_makeblock_sources():
-    """Scan all .cpp files in the makeblock src directory."""
-    makeblock_src = os.path.join(MBLOCK_DIR, "arduino-libraries", "makeblock", "src")
-    sources = glob.glob(os.path.join(makeblock_src, "*.cpp"))
-    print(f"\n[SCAN] Found {len(sources)} makeblock source files")
-    return sources
 
+def find_makeblock_sources():
+    """Only compile makeblock .cpp files directly included by the sketch."""
+    makeblock_src = os.path.join(MBLOCK_DIR, "arduino-libraries", "makeblock", "src")
+
+    with open(SKETCH_FILE, "r") as f:
+        sketch = f.read()
+
+    # Only look at direct includes in the sketch, not MeMCore.h
+    includes = re.findall(r'#include\s*[<"](.*?)[>"]', sketch)
+
+    headers = set(os.path.splitext(os.path.basename(h))[0] for h in includes)
+    sources = []
+    for header in headers:
+        cpp = os.path.join(makeblock_src, header + ".cpp")
+        if os.path.exists(cpp):
+            sources.append(cpp)
+            print(f"  [SCAN] Including: {header}.cpp")
+
+    # Always include MePort since everything depends on it
+    meport = os.path.join(makeblock_src, "MePort.cpp")
+    if meport not in sources and os.path.exists(meport):
+        sources.append(meport)
+        print(f"  [SCAN] Including: MePort.cpp (required)")
+
+    print(f"\n[SCAN] Compiling {len(sources)} makeblock source files")
+    return sources
 
 def main():
     if not os.path.exists(SKETCH_FILE):
