@@ -1,82 +1,176 @@
-import serial
-import threading
-import pygame
-import sys
+#include <MeMCore.h>
+#include <Arduino.h>
+#include <Wire.h>
+#include <SoftwareSerial.h>
 
-board = serial.Serial("COM3", 57600, timeout=1)
-print(f"Connected to {board.name}. Type commands to send, Ctrl+C to quit.\n")
+MeIR ir;
+MeUltrasonicSensor ultrasonic(3);
+MeLineFollower linefollower(1);
+MeDCMotor motor_l(9);
+MeDCMotor motor_r(10);
+MeBuzzer buzzer;
+MeRGBLed led(7, 2);
+// 0 is both leds, 1 is right, 2 is left
 
-print_raw_and_hex = False
+void _loop();
+void parseCommand(String cmd);
+int mode = 2;
+int last_ar = 0;
 
-move_direction = None
+void _delay(float seconds) {
+  long endTime = millis() + seconds * 1000;
+  while(millis() < endTime) _loop();
+}
 
-def read_loop():
-    while True:
-        line = board.readline()
-        if line:
-            if print_raw_and_hex:
-                print(f"[RAW] {line}")
-                print(f"[HEX] {line.hex()}")
-            print(f"[STR] {line.decode(errors='ignore').strip()}")
+void move(int direction, int speed) {
+  int leftSpeed = 0;
+  int rightSpeed = 0;
+  if(direction == 1) {
+    leftSpeed = speed;
+    rightSpeed = speed;
+  } else if(direction == 2) {
+    leftSpeed = -speed;
+    rightSpeed = -speed;
+  } else if(direction == 3) {
+    leftSpeed = -speed;
+    rightSpeed = speed;
+  } else if(direction == 4) {
+    leftSpeed = speed;
+    rightSpeed = -speed;
+  }
+  motor_l.run((9) == M1 ? -(leftSpeed) : (leftSpeed));
+  motor_r.run((10) == M1 ? -(rightSpeed) : (rightSpeed));
+}
 
-def write_loop():
-    global move_direction
-    while True:
-        cmd = input()
-        if cmd == "/livemove":
-            print("Entering live move mode. Press WASD to move, ESC to exit.")
-            live_move_mode()
-        else:
-            board.write((cmd + '\n').encode())
+void _loop() {}
 
-def live_move_mode():
-    global move_direction
-    pygame.init()
-    screen = pygame.display.set_mode((300, 100))
-    pygame.display.set_caption("Live Move Control")
-    clock = pygame.time.Clock()
-    print(f"Window caption set to: {pygame.display.get_caption()}")
-    running = True
-    color = (0,0,0)
-    while running:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                running = False
-            elif event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_ESCAPE:
-                    running = False
-                elif event.key == pygame.K_w:
-                    move_direction = 1
-                    color = (127, 0, 0)
-                elif event.key == pygame.K_s:
-                    move_direction = 2
-                    color = (0, 0, 127)
-                elif event.key == pygame.K_a:
-                    move_direction = 3
-                    color = (127, 64, 0)
-                elif event.key == pygame.K_d:
-                    move_direction = 4
-                    color = (10, 127, 0)
-                if move_direction:
-                    board.write(f"/move {move_direction} 50\n".encode())
-            elif event.type == pygame.KEYUP:
-                if event.key in [pygame.K_w, pygame.K_s, pygame.K_a, pygame.K_d]:
-                    color = (0, 0, 0)
-                    board.write(f"/move 1 0\n".encode())
+void setup() {
+  Serial.begin(115200);
+  led.fillPixelsBak(0, 2, 1);
+}
 
+void loop() {
+  int ar = analogRead(A7);
 
+  if(ar == 0 && ar != last_ar) {
+      delay(50);
+      ar = analogRead(A7);
+      if(ar == 0&&mode!=2) {
+          mode = 1 - mode;
+          move(1, 0);
+          Serial.print("Mode switched to ");
+          Serial.println(mode);
+      }
+  }
 
-        screen.fill(color)
-        pygame.display.flip()
-        clock.tick(30)
+  last_ar = ar;
+  if(mode==0||mode==2) {
+    if(Serial.available() > 0) {
+      String input = Serial.readStringUntil('\n');
+      parseCommand(input);
+    }
+    if(ir.keyPressed(64)){
+      move(1, 50 / 100.0 * 255);
+    }else if(ir.keyPressed(25)){
+      move(2, 50 / 100.0 * 255);
+    }else if(ir.keyPressed(7)){
+      move(3, 50 / 100.0 * 255);
+    }else if(ir.keyPressed(9)){
+      move(4, 50 / 100.0 * 255);
+    }else{
+      motor_l.run(0);
+      motor_r.run(0);
+    }
+    }
+  if(mode==1) {
+    if(15 < ultrasonic.distanceCm()){
+      led.setColor(0, 255, 255, 255);
+      move(1, 50 / 100.0 * 255);
+    } else {
+      led.setColor(0, 255, 0, 0);
+      move(4, 50 / 100.0 * 255);
+      _delay(0.1);
+      move(4, 0);
+    }
+    led.show();
+  }
+}
 
-    pygame.quit()
+void parseCommand(String cmd) {
+  cmd.trim();
 
-read_thread = threading.Thread(target=read_loop, daemon=True)
-read_thread.start()
+  if (cmd.startsWith("/color")) {
+    String params = cmd.substring(7);
 
-try:
-    write_loop()
-except KeyboardInterrupt:
-    print("\nDisconnected.")
-    board.close()
+    int led_index = 0;
+    int r = 0, g = 0, b = 0;
+
+    int count = sscanf(params.c_str(), "%d %d %d %d", &led_index, &r, &g, &b);
+
+    if (count == 4) {
+      led.setColor(led_index, r, g, b);
+      led.show();
+      Serial.print("Set LED ");
+      Serial.print(led_index);
+      Serial.print(" to RGB(");
+      Serial.print(r);
+      Serial.print(", ");
+      Serial.print(g);
+      Serial.print(", ");
+      Serial.print(b);
+      Serial.println(")");
+    } else {
+      Serial.println("ERROR: Invalid format. Use: /color <led_index> <r> <g> <b>");
+    }
+  } else if (cmd.startsWith("/tone")) {
+    String params = cmd.substring(6);
+    int tone = 0;
+    int duration = 0;
+
+    int count = sscanf(params.c_str(), "%d %d", &tone, &duration);
+
+    if(count == 2) {
+      buzzer.tone(tone, duration);
+      Serial.print("Playing tone ");
+      Serial.print(tone);
+      Serial.print(" for ");
+      Serial.print(duration);
+      Serial.println("ms");
+    } else {
+      Serial.println("ERROR: Invalid format. Use: /tone <tone> <duration>");
+    }
+  } else if (cmd.startsWith("/move")) {
+    String params = cmd.substring(6);
+    int dir = 0;
+    int power = 50;
+
+    int count = sscanf(params.c_str(), "%d %d", &dir, &power);
+
+    if(count >= 1 && dir > 0 && dir <= 4) {
+      if(power!=0) {
+        Serial.print("Walking in direction ");
+        Serial.print(dir);
+        Serial.print(" at ");
+        Serial.print(power);
+        Serial.println("%");
+        move(dir, power / 100.0 * 255);
+      } else {
+        Serial.println("Stopping");
+        motor_l.run(0);
+        motor_r.run(0);
+      }
+    } else {
+      Serial.println("ERROR: Invalid format. Use: /move <direction> or /move <direction> <power>");
+    }
+  } else if (cmd.startsWith("/mode")) {
+    mode = 2-mode;
+    Serial.print("On-board button is now ");
+    if(mode) {
+      Serial.println("disabled");
+    } else {
+      Serial.println("enabled");
+    }
+  } else {
+    Serial.println("ERROR: Unknown command");
+  }
+}

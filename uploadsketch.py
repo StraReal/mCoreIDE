@@ -6,7 +6,7 @@ import os
 import sys
 import glob
 
-# I extracted this process from the actual mblock 'IDE' (the block coding one) since loading code form the Arduino IDE doesn't work.
+# I extracted this process from the actual mBlock 'IDE' (the block coding one) since loading code form the Arduino IDE doesn't work.
 
 def load_config(config_file="vars.json"):
     if not os.path.exists(config_file):
