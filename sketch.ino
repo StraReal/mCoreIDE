@@ -6,6 +6,7 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 
+MeIR ir;
 MeUltrasonicSensor ultrasonic(3);
 MeLineFollower linefollower(1);
 MeDCMotor motor_l(9);
@@ -66,12 +67,24 @@ void loop() {
   }
 
   last_ar = ar;
-  if(Serial.available() > 0) {
-    String input = Serial.readStringUntil('\n');
-    if(mode==0||2) {
-      parseCommand(input);
-    }
-    }
+    if(mode==0||mode==2) {
+      if(Serial.available() > 0) {
+        String input = Serial.readStringUntil('\n');
+        parseCommand(input);
+      }
+      if(ir.keyPressed(64)){
+        move(1, 50 / 100.0 * 255);
+      }else if(ir.keyPressed(25)){
+        move(2, 50 / 100.0 * 255);
+      }else if(ir.keyPressed(7)){
+        move(3, 50 / 100.0 * 255);
+      }else if(ir.keyPressed(9)){
+        move(4, 50 / 100.0 * 255);
+      }else{
+        motor_l.run(0);
+        motor_r.run(0);
+      }
+      }
   if(mode==1) {
     if(15 < ultrasonic.distanceCm()){
       led.setColor(0, 255, 255, 255);
@@ -146,7 +159,8 @@ void parseCommand(String cmd) {
         move(dir, power / 100.0 * 255);
       } else {
         Serial.println("Stopping");
-        move(1, 0);
+        motor_l.run(0);
+        motor_r.run(0);
       }
     } else {
       Serial.println("ERROR: Invalid format. Use: /move <direction> or /move <direction> <power>");
