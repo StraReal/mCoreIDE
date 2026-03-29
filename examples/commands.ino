@@ -16,6 +16,7 @@ void _loop();
 void parseCommand(String cmd);
 int mode = 2;
 int last_ar = 0;
+bool wasPressed = false;
 
 void _delay(float seconds) {
   long endTime = millis() + seconds * 1000;
@@ -70,25 +71,30 @@ void loop() {
       parseCommand(input);
     }
     if(ir.keyPressed(64)){
-      move(1, 50 / 100.0 * 255);
+      wasPressed = true;
+      move(1, 0.7 * 255);
     }else if(ir.keyPressed(25)){
-      move(2, 50 / 100.0 * 255);
+      wasPressed = true;
+      move(2, 0.7 * 255);
     }else if(ir.keyPressed(7)){
-      move(3, 50 / 100.0 * 255);
+      wasPressed = true;
+      move(3, 0.7 * 255);
     }else if(ir.keyPressed(9)){
-      move(4, 50 / 100.0 * 255);
-    }else{
+      wasPressed = true;
+      move(4, 0.7 * 255);
+    }else if(wasPressed){
       motor_l.run(0);
       motor_r.run(0);
+      wasPressed = false;
     }
     }
   if(mode==1) {
     if(15 < ultrasonic.distanceCm()){
       led.setColor(0, 255, 255, 255);
-      move(1, 50 / 100.0 * 255);
+      move(1, 0.7 * 255);
     } else {
       led.setColor(0, 255, 0, 0);
-      move(4, 50 / 100.0 * 255);
+      move(4, 0.7 * 255);
       _delay(0.1);
       move(4, 0);
     }
